@@ -1,5 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
+// Copyright (c) 2013 The Primecoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -48,16 +49,16 @@ Value setgenerate(const Array& params, bool fHelp)
 }
 
 
-Value gethashespersec(const Array& params, bool fHelp)
+Value getprimespersec(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
-            "gethashespersec\n"
-            "Returns a recent hashes per second performance measurement while generating.");
+            "getprimespersec\n"
+            "Returns a recent primes per second performance measurement while generating.");
 
-    if (GetTimeMillis() - nHPSTimerStart > 8000)
+    if (GetTimeMillis() - nHPSTimerStart > 120000)
         return (boost::int64_t)0;
-    return (boost::int64_t)dHashesPerSec;
+    return (boost::int64_t)dPrimesPerSec;
 }
 
 
@@ -72,11 +73,11 @@ Value getmininginfo(const Array& params, bool fHelp)
     obj.push_back(Pair("blocks",        (int)nBestHeight));
     obj.push_back(Pair("currentblocksize",(uint64_t)nLastBlockSize));
     obj.push_back(Pair("currentblocktx",(uint64_t)nLastBlockTx));
-    obj.push_back(Pair("difficulty",    (double)GetDifficulty()));
     obj.push_back(Pair("errors",        GetWarnings("statusbar")));
     obj.push_back(Pair("generate",      GetBoolArg("-gen")));
     obj.push_back(Pair("genproclimit",  (int)GetArg("-genproclimit", -1)));
-    obj.push_back(Pair("hashespersec",  gethashespersec(params, false)));
+    obj.push_back(Pair("primespersec",  getprimespersec(params, false)));
+    obj.push_back(Pair("chainsperday",  dChainsPerDay));
     obj.push_back(Pair("pooledtx",      (uint64_t)mempool.size()));
     obj.push_back(Pair("testnet",       fTestNet));
     return obj;
@@ -96,15 +97,14 @@ Value getwork(const Array& params, bool fHelp)
             "If [data] is specified, tries to solve the block and returns true if it was successful.");
 
     if (vNodes.empty())
-        throw JSONRPCError(RPC_CLIENT_NOT_CONNECTED, "Bitcoin is not connected!");
+        throw JSONRPCError(RPC_CLIENT_NOT_CONNECTED, "Primecoin is not connected!");
 
     if (IsInitialBlockDownload())
-        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Bitcoin is downloading blocks...");
+        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Primecoin is downloading blocks...");
 
     typedef map<uint256, pair<CBlock*, CScript> > mapNewBlock_t;
     static mapNewBlock_t mapNewBlock;    // FIXME: thread safety
-    static vector<CBlock*> vNewBlock;
-    static CReserveKey reservekey(pwalletMain);
+    static vector<CBlockTemplate*> vNewBlockTemplate;
 
     if (params.size() == 0)
     {
@@ -112,7 +112,7 @@ Value getwork(const Array& params, bool fHelp)
         static unsigned int nTransactionsUpdatedLast;
         static CBlockIndex* pindexPrev;
         static int64 nStart;
-        static CBlock* pblock;
+        static CBlockTemplate* pblocktemplate;
         if (pindexPrev != pindexBest ||
             (nTransactionsUpdated != nTransactionsUpdatedLast && GetTime() - nStart > 60))
         {
@@ -120,9 +120,9 @@ Value getwork(const Array& params, bool fHelp)
             {
                 // Deallocate old blocks since they're obsolete now
                 mapNewBlock.clear();
-                BOOST_FOREACH(CBlock* pblock, vNewBlock)
-                    delete pblock;
-                vNewBlock.clear();
+                BOOST_FOREACH(CBlockTemplate* pblocktemplate, vNewBlockTemplate)
+                    delete pblocktemplate;
+                vNewBlockTemplate.clear();
             }
 
             // Clear pindexPrev so future getworks make a new block, despite any failures from here on
@@ -134,14 +134,15 @@ Value getwork(const Array& params, bool fHelp)
             nStart = GetTime();
 
             // Create new block
-            pblock = CreateNewBlock(reservekey);
-            if (!pblock)
+            pblocktemplate = CreateNewBlock(*pMiningKey);
+            if (!pblocktemplate)
                 throw JSONRPCError(RPC_OUT_OF_MEMORY, "Out of memory");
-            vNewBlock.push_back(pblock);
+            vNewBlockTemplate.push_back(pblocktemplate);
 
             // Need to update only after we know CreateNewBlock succeeded
             pindexPrev = pindexPrevNew;
         }
+        CBlock* pblock = &pblocktemplate->block; // pointer for convenience
 
         // Update nTime
         pblock->UpdateTime(pindexPrev);
@@ -191,7 +192,13 @@ Value getwork(const Array& params, bool fHelp)
         pblock->vtx[0].vin[0].scriptSig = mapNewBlock[pdata->hashMerkleRoot].second;
         pblock->hashMerkleRoot = pblock->BuildMerkleTree();
 
-        return CheckWork(pblock, *pwalletMain, reservekey);
+        // Deserialize PrimeChainMultiplier
+        unsigned char primemultiplier[48];
+        memcpy(primemultiplier, &pdata->bnPrimeChainMultiplier, 48);
+        CDataStream ssMult(BEGIN(primemultiplier), END(primemultiplier), SER_NETWORK, PROTOCOL_VERSION);
+        ssMult >> pblock->bnPrimeChainMultiplier;
+
+        return CheckWork(pblock, *pwalletMain, *pMiningKey);
     }
 }
 
@@ -237,18 +244,16 @@ Value getblocktemplate(const Array& params, bool fHelp)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid mode");
 
     if (vNodes.empty())
-        throw JSONRPCError(RPC_CLIENT_NOT_CONNECTED, "Bitcoin is not connected!");
+        throw JSONRPCError(RPC_CLIENT_NOT_CONNECTED, "Primecoin is not connected!");
 
     if (IsInitialBlockDownload())
-        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Bitcoin is downloading blocks...");
-
-    static CReserveKey reservekey(pwalletMain);
+        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Primecoin is downloading blocks...");
 
     // Update block
     static unsigned int nTransactionsUpdatedLast;
     static CBlockIndex* pindexPrev;
     static int64 nStart;
-    static CBlock* pblock;
+    static CBlockTemplate* pblocktemplate;
     if (pindexPrev != pindexBest ||
         (nTransactionsUpdated != nTransactionsUpdatedLast && GetTime() - nStart > 5))
     {
@@ -261,18 +266,19 @@ Value getblocktemplate(const Array& params, bool fHelp)
         nStart = GetTime();
 
         // Create new block
-        if(pblock)
+        if(pblocktemplate)
         {
-            delete pblock;
-            pblock = NULL;
+            delete pblocktemplate;
+            pblocktemplate = NULL;
         }
-        pblock = CreateNewBlock(reservekey);
-        if (!pblock)
+        pblocktemplate = CreateNewBlock(*pMiningKey);
+        if (!pblocktemplate)
             throw JSONRPCError(RPC_OUT_OF_MEMORY, "Out of memory");
 
         // Need to update only after we know CreateNewBlock succeeded
         pindexPrev = pindexPrevNew;
     }
+    CBlock* pblock = &pblocktemplate->block; // pointer for convenience
 
     // Update nTime
     pblock->UpdateTime(pindexPrev);
@@ -281,7 +287,6 @@ Value getblocktemplate(const Array& params, bool fHelp)
     Array transactions;
     map<uint256, int64_t> setTxIndex;
     int i = 0;
-    CCoinsViewCache &view = *pcoinsTip;
     BOOST_FOREACH (CTransaction& tx, pblock->vtx)
     {
         uint256 txHash = tx.GetHash();
@@ -306,13 +311,9 @@ Value getblocktemplate(const Array& params, bool fHelp)
         }
         entry.push_back(Pair("depends", deps));
 
-        int64_t nSigOps = tx.GetLegacySigOpCount();
-        if (tx.HaveInputs(view))
-        {
-            entry.push_back(Pair("fee", (int64_t)(tx.GetValueIn(view) - tx.GetValueOut())));
-            nSigOps += tx.GetP2SHSigOpCount(view);
-        }
-        entry.push_back(Pair("sigops", nSigOps));
+        int index_in_template = i - 1;
+        entry.push_back(Pair("fee", pblocktemplate->vTxFees[index_in_template]));
+        entry.push_back(Pair("sigops", pblocktemplate->vTxSigOps[index_in_template]));
 
         transactions.push_back(entry);
     }
@@ -368,9 +369,10 @@ Value submitblock(const Array& params, bool fHelp)
         throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Block decode failed");
     }
 
-    bool fAccepted = ProcessBlock(NULL, &pblock);
+    CValidationState state;
+    bool fAccepted = ProcessBlock(state, NULL, &pblock);
     if (!fAccepted)
-        return "rejected";
+        return "rejected"; // TODO: report validation state
 
     return Value::null;
 }

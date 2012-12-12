@@ -1,7 +1,8 @@
 # -*- mode: Makefile; -*-
 # Copyright (c) 2011 Bitcoin Developers
-# Distributed under the MIT/X11 software license, see the accompanying
-# file COPYING or http://www.opensource.org/licenses/mit-license.php.
+# Copyright (c) 2013 Primecoin Developers
+# Distributed under conditional MIT/X11 software license,
+# see the accompanying file COPYING.
 
 # Mac OS X makefile for bitcoin
 # Originally by Laszlo Hanyecz (solar@heliacal.net)
@@ -36,6 +37,7 @@ LIBS += \
  $(DEPSDIR)/lib/libboost_filesystem-mt.a \
  $(DEPSDIR)/lib/libboost_program_options-mt.a \
  $(DEPSDIR)/lib/libboost_thread-mt.a \
+ $(DEPSDIR)/lib/libboost_chrono-mt.a \
  $(DEPSDIR)/lib/libssl.a \
  $(DEPSDIR)/lib/libcrypto.a \
  -lz
@@ -48,6 +50,7 @@ LIBS += \
  -lboost_filesystem-mt \
  -lboost_program_options-mt \
  -lboost_thread-mt \
+ -lboost_chrono-mt \
  -lssl \
  -lcrypto \
  -lz
@@ -62,7 +65,7 @@ ifdef RELEASE
 # the same way.
 CFLAGS = -mmacosx-version-min=10.5 -arch i386 -O3
 else
-CFLAGS = -g
+DEBUGFLAGS = -g
 endif
 
 # ppc doesn't work because we don't support big-endian
@@ -70,6 +73,7 @@ CFLAGS += -Wall -Wextra -Wformat -Wformat-security -Wno-unused-parameter \
     $(DEBUGFLAGS) $(DEFS) $(INCLUDEPATHS)
 
 OBJS= \
+    leveldb/libleveldb.a \
     obj/alert.o \
     obj/version.o \
     obj/checkpoints.o \
@@ -79,7 +83,6 @@ OBJS= \
     obj/key.o \
     obj/db.o \
     obj/init.o \
-    obj/irc.o \
     obj/keystore.o \
     obj/main.o \
     obj/net.o \
@@ -96,9 +99,13 @@ OBJS= \
     obj/util.o \
     obj/wallet.o \
     obj/walletdb.o \
+    obj/hash.o \
+    obj/bloom.o \
     obj/noui.o \
     obj/leveldb.o \
-    obj/txdb.o
+    obj/txdb.o \
+    obj/prime.o \
+    obj/checkpointsync.o
 
 ifndef USE_UPNP
 	override USE_UPNP = -
@@ -116,10 +123,10 @@ ifneq (${USE_IPV6}, -)
 	DEFS += -DUSE_IPV6=$(USE_IPV6)
 endif
 
-all: bitcoind
+all: primecoind
 
-test check: test_bitcoin FORCE
-	./test_bitcoin
+test check: test_primecoin FORCE
+	./test_primecoin
 
 #
 # LevelDB support
@@ -128,8 +135,7 @@ LIBS += $(CURDIR)/leveldb/libleveldb.a $(CURDIR)/leveldb/libmemenv.a
 DEFS += $(addprefix -I,$(CURDIR)/leveldb/include)
 DEFS += $(addprefix -I,$(CURDIR)/leveldb/helpers)
 leveldb/libleveldb.a:
-	@echo "Building LevelDB ..." && cd leveldb && $(MAKE) libleveldb.a libmemenv.a && cd ..
-obj/leveldb.o: leveldb/libleveldb.a
+	@echo "Building LevelDB ..." && cd leveldb && $(MAKE) CC=$(CC) CXX=$(CXX) OPT="$(CFLAGS)" libleveldb.a libmemenv.a && cd ..
 
 # auto-generated dependencies:
 -include obj/*.P
@@ -147,7 +153,7 @@ obj/%.o: %.cpp
 	      -e '/^$$/ d' -e 's/$$/ :/' < $(@:%.o=%.d) >> $(@:%.o=%.P); \
 	  rm -f $(@:%.o=%.d)
 
-bitcoind: $(OBJS:obj/%=obj/%)
+primecoind: $(OBJS:obj/%=obj/%)
 	$(CXX) $(CFLAGS) -o $@ $(LIBPATHS) $^ $(LIBS)
 
 TESTOBJS := $(patsubst test/%.cpp,obj-test/%.o,$(wildcard test/*.cpp))
@@ -159,15 +165,16 @@ obj-test/%.o: test/%.cpp
 	      -e '/^$$/ d' -e 's/$$/ :/' < $(@:%.o=%.d) >> $(@:%.o=%.P); \
 	  rm -f $(@:%.o=%.d)
 
-test_bitcoin: $(TESTOBJS) $(filter-out obj/init.o,$(OBJS:obj/%=obj/%))
+test_primecoin: $(TESTOBJS) $(filter-out obj/init.o,$(OBJS:obj/%=obj/%))
 	$(CXX) $(CFLAGS) -o $@ $(LIBPATHS) $^ $(LIBS) $(TESTLIBS)
 
 clean:
-	-rm -f bitcoind test_bitcoin
+	-rm -f primecoind test_primecoin
 	-rm -f obj/*.o
 	-rm -f obj-test/*.o
 	-rm -f obj/*.P
 	-rm -f obj-test/*.P
 	-rm -f obj/build.h
+	-cd leveldb && $(MAKE) clean || true
 
 FORCE:

@@ -20,8 +20,7 @@
       <bool>false</bool>
      </property>
      <property name="styleSheet">
-      <string notr="true">background-color: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0, stop:0 #F0D0A0, stop:1 #F8D488);  color:#000000
-</string>
+      <string notr="true">background-color: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0, stop:0 #F0D0A0, stop:1 #F8D488); color:#000000;</string>
      </property>
      <property name="wordWrap">
       <bool>true</bool>
@@ -50,7 +49,6 @@
              <widget class="QLabel" name="label_5">
               <property name="font">
                <font>
-                <pointsize>11</pointsize>
                 <weight>75</weight>
                 <bold>true</bold>
                </font>
@@ -63,7 +61,7 @@
             <item>
              <widget class="QLabel" name="labelWalletStatus">
               <property name="toolTip">
-               <string>The displayed information may be out of date. Your wallet automatically synchronizes with the Bitcoin network after a connection is established, but this process has not completed yet.</string>
+               <string>The displayed information may be out of date. Your wallet automatically synchronizes with the Primecoin network after a connection is established, but this process has not completed yet.</string>
               </property>
               <property name="styleSheet">
                <string notr="true">QLabel { color: red; }</string>
@@ -160,23 +158,6 @@
               </property>
              </widget>
             </item>
-            <item row="3" column="0">
-             <widget class="QLabel" name="label_2">
-              <property name="text">
-               <string>Number of transactions:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="3" column="1">
-             <widget class="QLabel" name="labelNumTransactions">
-              <property name="toolTip">
-               <string>Total number of transactions in wallet</string>
-              </property>
-              <property name="text">
-               <string notr="true">0</string>
-              </property>
-             </widget>
-            </item>
             <item row="2" column="0">
              <widget class="QLabel" name="labelImmatureText">
               <property name="text">
@@ -246,7 +227,7 @@
             <item>
              <widget class="QLabel" name="labelTransactionsStatus">
               <property name="toolTip">
-               <string>The displayed information may be out of date. Your wallet automatically synchronizes with the Bitcoin network after a connection is established, but this process has not completed yet.</string>
+               <string>The displayed information may be out of date. Your wallet automatically synchronizes with the Primecoin network after a connection is established, but this process has not completed yet.</string>
               </property>
               <property name="styleSheet">
                <string notr="true">QLabel { color: red; }</string>

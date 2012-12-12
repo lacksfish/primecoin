@@ -1,11 +1,14 @@
+#include <QApplication>
+
 #include "guiutil.h"
+
 #include "bitcoinaddressvalidator.h"
 #include "walletmodel.h"
 #include "bitcoinunits.h"
+
 #include "util.h"
 #include "init.h"
 
-#include <QString>
 #include <QDateTime>
 #include <QDoubleValidator>
 #include <QFont>
@@ -13,7 +16,6 @@
 #include <QUrl>
 #include <QTextDocument> // For Qt::escape
 #include <QAbstractItemView>
-#include <QApplication>
 #include <QClipboard>
 #include <QFileDialog>
 #include <QDesktopServices>
@@ -77,7 +79,8 @@ void setupAmountWidget(QLineEdit *widget, QWidget *parent)
 
 bool parseBitcoinURI(const QUrl &uri, SendCoinsRecipient *out)
 {
-    if(uri.scheme() != QString("bitcoin"))
+    // return if URI is not valid or is no bitcoin URI
+    if(!uri.isValid() || uri.scheme() != QString("primecoin"))
         return false;
 
     SendCoinsRecipient rv;
@@ -126,9 +129,9 @@ bool parseBitcoinURI(QString uri, SendCoinsRecipient *out)
     //
     //    Cannot handle this later, because bitcoin:// will cause Qt to see the part after // as host,
     //    which will lower-case it (and thus invalidate the address).
-    if(uri.startsWith("bitcoin://"))
+    if(uri.startsWith("primecoin://"))
     {
-        uri.replace(0, 10, "bitcoin:");
+        uri.replace(0, 12, "primecoin:");
     }
     QUrl uriInstance(uri);
     return parseBitcoinURI(uriInstance, out);
@@ -157,8 +160,10 @@ void copyEntryData(QAbstractItemView *view, int column, int role)
 
     if(!selection.isEmpty())
     {
-        // Copy first item
-        QApplication::clipboard()->setText(selection.at(0).data(role).toString());
+        // Copy first item (global clipboard)
+        QApplication::clipboard()->setText(selection.at(0).data(role).toString(), QClipboard::Clipboard);
+        // Copy first item (global mouse selection for e.g. X11 - NOP on Windows)
+        QApplication::clipboard()->setText(selection.at(0).data(role).toString(), QClipboard::Selection);
     }
 }
 
@@ -210,7 +215,7 @@ QString getSaveFileName(QWidget *parent, const QString &caption,
 
 Qt::ConnectionType blockingGUIThreadConnection()
 {
-    if(QThread::currentThread() != QCoreApplication::instance()->thread())
+    if(QThread::currentThread() != qApp->thread())
     {
         return Qt::BlockingQueuedConnection;
     }
@@ -222,7 +227,7 @@ Qt::ConnectionType blockingGUIThreadConnection()
 
 bool checkPoint(const QPoint &p, const QWidget *w)
 {
-    QWidget *atW = qApp->widgetAt(w->mapToGlobal(p));
+    QWidget *atW = QApplication::widgetAt(w->mapToGlobal(p));
     if (!atW) return false;
     return atW->topLevelWidget() == w;
 }
@@ -272,7 +277,7 @@ bool ToolTipToRichTextFilter::eventFilter(QObject *obj, QEvent *evt)
 #ifdef WIN32
 boost::filesystem::path static StartupShortcutPath()
 {
-    return GetSpecialFolderPath(CSIDL_STARTUP) / "Bitcoin.lnk";
+    return GetSpecialFolderPath(CSIDL_STARTUP) / "Primecoin.lnk";
 }
 
 bool GetStartOnSystemStartup()
@@ -354,7 +359,7 @@ boost::filesystem::path static GetAutostartDir()
 
 boost::filesystem::path static GetAutostartFilePath()
 {
-    return GetAutostartDir() / "bitcoin.desktop";
+    return GetAutostartDir() / "primecoin.desktop";
 }
 
 bool GetStartOnSystemStartup()
@@ -392,10 +397,10 @@ bool SetStartOnSystemStartup(bool fAutoStart)
         boost::filesystem::ofstream optionFile(GetAutostartFilePath(), std::ios_base::out|std::ios_base::trunc);
         if (!optionFile.good())
             return false;
-        // Write a bitcoin.desktop file to the autostart directory:
+        // Write a primecoin.desktop file to the autostart directory:
         optionFile << "[Desktop Entry]\n";
         optionFile << "Type=Application\n";
-        optionFile << "Name=Bitcoin\n";
+        optionFile << "Name=Primecoin\n";
         optionFile << "Exec=" << pszExePath << " -min\n";
         optionFile << "Terminal=false\n";
         optionFile << "Hidden=false\n";
@@ -416,10 +421,10 @@ bool SetStartOnSystemStartup(bool fAutoStart) { return false; }
 HelpMessageBox::HelpMessageBox(QWidget *parent) :
     QMessageBox(parent)
 {
-    header = tr("Bitcoin-Qt") + " " + tr("version") + " " +
+    header = tr("Primecoin-Qt") + " " + tr("version") + " " +
         QString::fromStdString(FormatFullVersion()) + "\n\n" +
         tr("Usage:") + "\n" +
-        "  bitcoin-qt [" + tr("command-line options") + "]                     " + "\n";
+        "  primecoin-qt [" + tr("command-line options") + "]                     " + "\n";
 
     coreOptions = QString::fromStdString(HelpMessage());
 
@@ -428,7 +433,7 @@ HelpMessageBox::HelpMessageBox(QWidget *parent) :
         "  -min                   " + tr("Start minimized") + "\n" +
         "  -splash                " + tr("Show splash screen on startup (default: 1)") + "\n";
 
-    setWindowTitle(tr("Bitcoin-Qt"));
+    setWindowTitle(tr("Primecoin-Qt"));
     setTextFormat(Qt::PlainText);
     // setMinimumWidth is ignored for QMessageBox so put in non-breaking spaces to make it wider.
     setText(header + QString(QChar(0x2003)).repeated(50));
@@ -454,4 +459,3 @@ void HelpMessageBox::showOrPrint()
 }
 
 } // namespace GUIUtil
-

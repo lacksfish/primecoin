@@ -1,5 +1,6 @@
 #include "sendcoinsdialog.h"
 #include "ui_sendcoinsdialog.h"
+
 #include "walletmodel.h"
 #include "bitcoinunits.h"
 #include "addressbookpage.h"
@@ -10,7 +11,6 @@
 #include "base58.h"
 
 #include <QMessageBox>
-#include <QLocale>
 #include <QTextDocument>
 #include <QScrollBar>
 
@@ -127,7 +127,7 @@ void SendCoinsDialog::on_sendButton_clicked()
         break;
     case WalletModel::InvalidAmount:
         QMessageBox::warning(this, tr("Send Coins"),
-            tr("The amount to pay must be larger than 0."),
+            tr("The amount to pay must be at least one cent (0.01)."),
             QMessageBox::Ok, QMessageBox::Ok);
         break;
     case WalletModel::AmountExceedsBalance:
@@ -170,7 +170,7 @@ void SendCoinsDialog::clear()
     // Remove entries until only one left
     while(ui->entries->count())
     {
-        delete ui->entries->takeAt(0)->widget();
+        ui->entries->takeAt(0)->widget()->deleteLater();
     }
     addEntry();
 
@@ -202,7 +202,7 @@ SendCoinsEntry *SendCoinsDialog::addEntry()
     entry->clear();
     entry->setFocus();
     ui->scrollAreaWidgetContents->resize(ui->scrollAreaWidgetContents->sizeHint());
-    QCoreApplication::instance()->processEvents();
+    qApp->processEvents();
     QScrollBar* bar = ui->scrollArea->verticalScrollBar();
     if(bar)
         bar->setSliderPosition(bar->maximum());
@@ -226,7 +226,7 @@ void SendCoinsDialog::updateRemoveEnabled()
 
 void SendCoinsDialog::removeEntry(SendCoinsEntry* entry)
 {
-    delete entry;
+    entry->deleteLater();
     updateRemoveEnabled();
 }
 
@@ -243,6 +243,26 @@ QWidget *SendCoinsDialog::setupTabChain(QWidget *prev)
     QWidget::setTabOrder(prev, ui->addButton);
     QWidget::setTabOrder(ui->addButton, ui->sendButton);
     return ui->sendButton;
+}
+
+void SendCoinsDialog::setAddress(const QString &address)
+{
+    SendCoinsEntry *entry = 0;
+    // Replace the first entry if it is still unused
+    if(ui->entries->count() == 1)
+    {
+        SendCoinsEntry *first = qobject_cast<SendCoinsEntry*>(ui->entries->itemAt(0)->widget());
+        if(first->isClear())
+        {
+            entry = first;
+        }
+    }
+    if(!entry)
+    {
+        entry = addEntry();
+    }
+
+    entry->setAddress(address);
 }
 
 void SendCoinsDialog::pasteEntry(const SendCoinsRecipient &rv)
